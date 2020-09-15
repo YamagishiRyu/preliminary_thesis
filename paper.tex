@@ -1,0 +1,657 @@
+\documentclass[a4j,10pt, twocolumn]{jarticle}
+\usepackage[dvipdfmx]{graphicx}
+\usepackage[top=3cm, bottom=27mm, left=18mm, right=18mm]{geometry}
+\usepackage{bm}
+\usepackage[psamsfonts]{amssymb}
+\usepackage{amsmath}
+\usepackage{float}
+\usepackage{tikz}
+\usetikzlibrary{bayesnet}
+\usepackage{algorithm}
+\usepackage{algorithmic}
+\usepackage{comment}
+\usepackage{caption}
+%---------------------------------------------------
+% ページの設定
+%---------------------------------------------------
+\pagestyle{empty}
+\fontsize{10.5pt}{0pt}\selectfont
+
+\begin{document}
+\twocolumn
+[
+\begin{center}
+{\large ユーザー体験に基づく個人化観光推薦システム} \\
+{\large Personalized Sightseeing Recommendation System Based on User Experience} \\
+山岸 立 \\
+Ryu Yamagishi
+
+\vspace{2truemm}
+  \setlength{\leftskip}{.7cm}
+  \setlength{\rightskip}{.7cm}
+  {\setlength{\oddsidemargin}{50mm}
+  現在の観光推薦システムは特定の場所に集中し，個人の好みに合うものではない．
+  そこで本論文では，FlickrやInstagramなどの投稿を対象にユーザの嗜好を分析する確率モデルとそれに基づくユーザの求める観光体験を推薦するシステムを提案する．
+  提案する推薦システムでは，ユーザ体験の4要素(Who, When, Where, What)をモデリングし，ユーザの行動データに応じて逐次的にユーザの嗜好を推論しながら観光スポットや観光体験を推薦する．
+}
+
+\end{center}
+\vspace{2truemm}
+]
+
+
+%---------------------------------------------------
+% 本文
+%---------------------------------------------------
+\section{はじめに} \label{introduction}
+観光において，多くの人は観光する都市が決まったら旅行雑誌や観光ウェブサイトを見て調べ，行く場所を決定することが多い．
+そのような雑誌やウェブサイトは多くの情報を含んでおり，ときにどれを選べば良いのかわからなくなることがある．
+自分たちが知らない土地で書いてある説明だけをみて自分たちが本当に行きたい場所をみつことは容易ではない．
+また，これらの媒体は過度に有名な観光地に偏っている．
+それは誰が調べても同じ結果を示すため，より人気の高い場所を示すことが圧倒的に多いからである．
+このことは観光地におけるオーバーツーリズムを誘発し，観光地にも観光客にも負の影響をもたらす．
+それゆえそれらの観光の問題を解決するためには個人化を実現した観光推薦システムが必要となる．
+個人化をすることで，観光客は本当に自分の好みにあった場所に行くことができ，同時に観光客を色々な場所に分散させることが可能となる．
+
+例として京都に観光に行くことを挙げる．
+Googleで"京都 観光"と検索すると有名な観光地のリストがその地図上の場所とともに表示される
+これは誰が検索しても同じ結果を示し，個々人のユーザに特化した検索結果ではない．
+京都にすでに住んでいる地元の人も日本に初めて来る外国人も同じ結果が示される．
+また，食べ歩きが好きな人も寺社をじっくり見たい人も同じ結果が示される．
+そしてそれは清水寺や金閣寺，伏見稲荷大社などの有名すぎて過度に人が集まっている場所である．
+この状況ではユーザにとっても自分が求めた答えかわからず，観光地もオーバーツーリズムが加速するばかりであり，早急な個人化が必要となる．
+
+また，本研究では観光はある場所に行くだけでなく，その場で何をするのかを含めて観光と考えている．
+それゆえそのような体験を推薦システムでも提供すべきであると考える．
+本研究では\cite{yuan2013and}で示されている通り，観光体験とは4つの要素からなるとする．
+4つの要素は行動の主体を表すWho,時間を表すWhen,場所を表すWhere, そして行動自体をあらわすWhatである．
+この4要素を考慮することで，誰がいつどこで何をしたかという体験の具体的な部分を表すことができる．
+
+そして，昨今InstagramやFlickrに代表されるような写真を主体としたSNSが流行している．
+このような写真を主体とした投稿データは観光体験を表すデータに最適である．
+写真によって何を行ったのかというWhatの部分が明確であり，その投稿に付随して場所，時間を取得できる．
+それゆえ，本研究におけるデータセットとして最適である．
+
+本研究では，この4つの要素をトピックモデルを用いて分析することでその人の趣味嗜好および場所の特性を考慮して，推薦システムで複数の体験を推薦する手法を提案する．
+
+本論文における貢献は以下である．
+\begin{quote}
+  \begin{itemize}
+    \item InstagramやFlickrに公開されている画像とそのメタデータを用いて，ユーザの体験を分析する確率モデルを提案する．
+    \item ユーザを複数グループに分割し，そのグループごとにその人々の趣味嗜好との関係を確率的に分析する．これにより個々の観光客のデータが少ない，いわゆるコールドスタート問題を緩和する．
+    \item 観光における推薦システムでありながら，場所だけでなくその場における行動まで推薦することができる．
+  \end{itemize}
+\end{quote}
+
+以下では，\ref{related_work}節で関連した研究を紹介し，\ref{proposed_method}節で提案手法を示す．
+そして提案手法に関する実験を説明した後に提案手法を応用したアプリケーションを\ref{application}節で説明する．
+最後に\ref{future_work}, \ref{summary}節で今後の課題とまとめについて述べる．
+
+%---------------------------------------------------
+\section{関連研究} \label{related_work}
+Q.YuanらはTwitterを対象にユーザの行動を分析するモデルを提案している\cite{yuan2013and}\cite{yuan2015and}．
+この研究ではユーザの行動をWho, Where, When, Whatで分割し，Twitterのデータを利用して行動分析および予測を行っている．
+Yuanらの手法は，日常生活でたくさん発信される位置情報付きの情報を対象としているが，個人個人のデータ量が少ない観光では適用困難である．
+そのため，我々のモデルでは似た行動をするユーザをグループ化し，それを表現する潜在変数をモデルに導入している．
+
+普段の生活圏では決まった行動を取りやすいが，観光においては全く異なる行動指針によって動く．
+実際に\cite{song2010limits}では普段の行動の軌跡の情報量を測ることで最大93\%の精度で行動予測できることを述べている．
+また，同時に旅行時の行動は大きな違いがあることも述べている．
+故に同じPoint of Interest(POI)の分野でもその普段の行動であるかどうかを見ることが重要となる．
+特に\cite{liu2017experimental}では，POIの分野で普段の行動かどうか，つまりin townかout of townかによって多くの研究が整理され，まとめられている．
+
+観光の行動予測で最も問題となるのが，同じユーザでの再現性の少なさである．
+観光においては同じ場所に何回も行くことが少ない．
+旅行できて，特定の観光地を転々と観光し，その後は一度も来ないということは少なくない．
+つまり，ユーザと場所の関係はスパースなものとなりやすく，データの扱いに注意が必要となる．
+\cite{ference2013location}\cite{yin2013lcars}\cite{wang2015geo}\cite{yin2016joint}ではそのような問題に取り組み, in townとout of townどちらにも対応できるようなモデルを作っている．
+特に\cite{ference2013location}は確率モデルでの分析をするものではなく，協調フィルタリングベースで推薦システムを用いている．
+
+\cite{wang2015geo}\cite{zhuang2017sns}\cite{馬強2017観光情報学の最前線}\cite{馬強2019観光の分散化と個人化の実現に向けたユーザ生成コンテンツの分析と利活用技術について}では，データがスパースになる問題に加え，コールドスタート問題に陥ってしまうことに対してグループという概念を入れることによって対応している．
+グループを入れることで，一人のユーザのデータが少なくてもグループ全体で特徴が捉えられていれば，最適な推薦をすることができる．
+これに習って，本研究もユーザをグループに分割し，グループごとに趣味嗜好を捉える．
+
+
+%---------------------------------------------------
+\section{提案手法} \label{proposed_method}
+この節では実際に観光体験を推薦するための手法を説明していく．
+本研究のアプリケーション自体は大きく分けて2つの構成要素からなる．一つ目は分析モデルと呼び，分析モデルではユーザの行動データからユーザごとの趣味嗜好を捉える役割がある．次に推薦システム本体がある．推薦システムでは分析モデルで捉えたユーザの趣味嗜好を使い，新しいユーザに対して適用してその人にあった観光体験を提供する．
+
+まず最初に\ref{intuition}節でモデルを構築すための基本的な洞察，次に\ref{model_definition}節でモデルの説明，最後に\ref{recommendation}節で推薦システム本体について説明していく．
+
+\subsection{洞察} \label{intuition}
+分析モデルでユーザがどのような場所，どのような行動を好むのかをデータから抽出するためにはまずユーザがどのような基準で意思決定をするのかということをある程度基準を持ってモデリングしなくてはならない．本研究で考えるそのような意思決定の基準を洞察と呼び，この節で説明する．
+本研究では次の複数の洞察を元に観光地でのユーザの行動をモデリングする．
+
+\begin{description}
+  \setlength{\leftskip}{.5cm}
+  \item[\textbf{洞察1}] 趣味嗜好が似ている人は複数人いる．つまり，趣味嗜好(以降トピック)を基準にユーザをいくつかのグループに分割できる．逆にグループは複数のユーザを持ち，特定のトピックを持つことになる．例えば，あるユーザAとあるユーザBの趣味嗜好が似ている場合，AとBは同じグループに属し，Aがある場所である行動を好むのならばそれがBにも当てはまる可能性が高いということである．
+  \item[\textbf{洞察2}] 場所は趣味嗜好にしたがって決定される．趣味嗜好が似ているならば同じ場所に行く確率は高まり，同じような確率分布からその確率は決まる．例えば有名場所が好きな人たちは京都でいう金閣寺や伏見稲荷大社を行くことを好むであろうし，甘味が好きな人は美味しい甘味処をベースとして観光の計画を立てるだろう．
+  \item[\textbf{洞察3}] 行動は趣味嗜好にしたがって決定される．ここでいう行動の規模はどこかに行くというものでなく，その場で何をするのかという小規模のものに限定される．例えば有名なスポットで写真撮影をしたり，甘味を食べたり，座禅を組むなどもこの中に入る．趣味嗜好が似ているならば同じ行動を行う確率は高まり，同じような確率分布からその確率は決まる．また，この時行う行動は一つとは限らない．複数の行動を同じ場所でとることは極めて自然である．
+  \item[\textbf{洞察4}] 行動をする時間は趣味嗜好にしたがって決定される．例えばお酒を飲むことが好きな人たちは夜に当地の居酒屋で飲むのを好んだりするだろうし，朝早くに観光を楽しむ人もいるだろう．
+  \item[\textbf{洞察5}] その場でする行動というものは場所に影響される．これはその場所に行く目的がその場所で行う行動であることが多いことに起因する．先ほどの行動の例で例えると，有名な場所に行く人たちは特定の写真スポットで写真をとるだろうし，座禅を組むなどはその行動を目的としてその場所に行くだろう．
+\end{description}
+%
+\subsection{ユーザ体験を分析するモデル} \label{model_definition}
+\ref{intuition}節で説明した洞察を踏まえて，モデルを定義する．
+ただし，モデルを構成するに当たって洞察１，洞察２，洞察３をベースとして洞察４，洞察５はモデルに順次取り入れていく．それによって洞察自体の意思決定に対する影響を観測し，よりユーザの行動を捉えたモデルを構成することを目的とする．
+そのため，分析モデルの候補として3つのモデルを構成した．
+洞察１，洞察２，洞察３のみを取り入れたベースモデル，洞察5を取り入れたLW関連モデル，洞察4を取り入れた時間導入モデルの３つである．
+以降ひとつずつ説明していく．
+説明するに当たって必要な記号の説明を\ref{variable_definition}に示しておく．
+
+図\ref{graphical_model}にモデルのグラフィカルモデルを示す．
+また，記号の定義を表\ref{variable_definition}に示す．
+
+\begin{center}
+  \begin{table}[h]
+  \caption{記号の定義}
+  \label{variable_definition}
+  \begin{tabular}{ p{1.5cm} p{6cm} }
+    \hline
+    記号 & 定義 \\
+    \hline
+    \bm{$G$} & グループの集合 \\
+    \bm{$U$} & ユーザの集合 \\
+    \bm{$D$} & 投稿の集合 \\
+    \bm{$L$} & 場所の集合 \\
+    \bm{$W$} & 行動を示す単語の集合 \\
+    \bm{$T$} & 時間の集合 \\
+    \hline
+    $|\bm{D}|$ & 投稿(データ)数 \\
+    $|\bm{G}|$ & グループ数 \\
+    $|\bm{U}|$ & ユーザ数 \\
+    $|\bm{L}|$ & 場所数 \\
+    $|\bm{W}|$ & 行動を示す単語数 \\
+    $N_w$ & ある投稿$d(\in D)$での行動を示す単語数 \\
+    \hline
+    $g_d$ & ある投稿$d(\in D)$におけるグループ \\
+    $u_d$ & ある投稿$d(\in D)$におけるユーザ \\
+    $l_d$ & ある投稿$d(\in D)$における位置情報 \\
+    $w_d$ & ある投稿$d(\in D)$における行動を示す単語 \\
+    $t_d$ & ある投稿$d(\in D)$における時間 \\
+    \hline
+    $\theta$ & グループを与えるカテゴリ分布 \\
+    $\pi_{g_d}$ & グループごとのユーザの生成確率分布 \\
+    $\phi_{g_d}$ & グループごとの位置情報の生成確率分布 \\
+    $\sigma_{g_d}$ & グループごとの行動を示す単語の生成確率分布 \\
+    $\mu_{l_d}$ & グループごとの行動を示す単語の生成確率分布 \\
+    $\tau_{g_d}$ & グループごとの時間の生成確率分布 \\
+    \hline
+    $\alpha, \beta, \gamma$, $\delta$, $\epsilon$ & ハイパーパラメータ \\
+    \hline
+  \end{tabular}
+  \end{table}
+\end{center}
+%
+
+\subsubsection{ベースモデル}
+本研究のモデルでは，ユーザ，場所，行動を表す単語を観測変数として扱い，主にグループを潜在変数とする．
+つまりユーザの趣味嗜好の部分はこのグループによって抽出される．
+ベースモデルのグラフィカルモデルを図\ref{basemodel}に示す．
+ただし，グラフィカルモデル上の$w_{d, i}$というのはある投稿$d(\in D)$における行動を示す単語のうち$i$番目の単語という意味である．
+
+\begin{center}
+\begin{figure}[tb]
+  \tikz{
+    \node[latent] (group) {$g_d$};
+    \node[obs, above=of group] (user) {$u_d$};
+    \node[obs, right=of group, xshift=1cm] (word) {$w_{d,i}$};
+    \node[latent, left=of group] (theta) {$\theta$};
+    \node[const, above=of theta] (alpha) {$\alpha$};
+    \node[obs, above=of word] (location) {$l_d$};
+    \node[latent, above=of location, yshift=.5cm] (phi) {$\phi_{g_d}$};
+    \node[const, above=of phi] (beta) {$\beta$};
+    \node[latent, above=of user, yshift=.5cm] (pi) {$\pi_{g_d}$};
+    \node[const, above=of pi, inner sep=.05cm] (gamma) {$\gamma$};
+    \node[latent, right=of word] (sigma) {$\sigma_{g_d}$};
+    \node[const, above=of sigma] (delta) {$\delta$};
+
+    \edge {alpha} {theta};
+    \edge {theta} {group};
+    \edge {group, pi} {user};
+    \edge {group, sigma} {word};
+    \edge {delta} {sigma};
+    \edge {phi, group} {location};
+    \edge {beta} {phi};
+    \edge {gamma} {pi};
+
+    \plate[inner sep=.25cm, xshift=-.15cm, yshift=.15cm] {word-plate} {(word)} {$N_w$};
+    \plate[inner sep=.25cm, xshift=-.15cm, yshift=.15cm] {data-plate} {(word-plate)(location)(user)(group)} {$|\bm{D}|$};
+    \plate[inner sep=.30cm, yshift=.15cm] {group-plate1} {(phi)(pi)} {$|\bm{G}|$};
+    \plate[inner sep=.25cm, yshift=.15cm] {group-plate2} {(sigma)} {$|\bm{G}|$};
+  }
+  \caption{ベースモデルのグラフィカルモデル}
+  \label{basemodel}
+\end{figure}
+\end{center}
+
+ベースモデルではもっとも基本的な洞察1, 洞察2, 洞察3を元にモデリングしている．洞察1はグラフィカルモデルでいう$g_d$から$u_d$への矢印に対応しており，洞察2は$g_d$から$l_d$への矢印，洞察3は$g_d$から$w_{d,i}$への矢印を表している．
+ベースモデルは観測データどうしの影響がないもっともシンプルな状態のモデルである．
+%
+\begin{algorithm}[h]
+  \caption{ベースモデルにおける生成過程}\label{generative_part}
+  \begin{algorithmic}[1]
+    \STATE $\theta \sim Dir(\alpha)$
+    \FOR{$g$ in $|\bm{G}|$}
+    \STATE $\pi_g \sim Dir(\gamma)$
+    \STATE $\phi_g \sim Dir(\beta)$
+    \STATE $\sigma_g \sim Dir(\delta)$
+    \ENDFOR
+    \FOR{$d$ in $|\bm{D}|$}
+    \STATE $g_d \sim Categorical(\theta)$
+    \STATE $u_d \sim Categorical(\pi_{g_d})$
+    \STATE $l_d \sim Categorical(\phi_{g_d})$
+    \FOR{$d$ in $N_w$}
+    \STATE $w_{d, i} \sim Categorical(\sigma_{g_d})$
+    \ENDFOR
+    \ENDFOR
+  \end{algorithmic}
+\end{algorithm}
+
+ベースモデルにおける生成過程を説明していく．アルゴリズムをAlgorithm\ref{generative_part}に示す．
+$\theta$はグループを生成する確率分布であり，ハイパーパラメータ$\alpha$をパラメータとしてとるディリクレ分布から生成される．
+故にその関係は，
+\begin{equation*}
+  \theta \sim Dir(\alpha)
+\end{equation*}
+となる．なぜディリクレ分布かと述べると，$\theta$はグループを生成確率分布であるためその共役事前分布であるディリクレ分布を採用することで，より簡単に事後分布を求めることができるからである．
+
+ここからはある投稿データ$d(\in \bm{D})$の元で生成していく．
+グループの生成確率分布$\theta$からグループ$g_d$を生成し，
+\begin{equation*}
+  g_d \sim Categorical(\theta)
+\end{equation*}
+と表せる．
+ここでのグループは潜在変数であり，ユーザの趣味嗜好が含まれることになる．
+投稿データのプレート上にあるのはその投稿データのユーザ，場所，行動であり，そのグループが決まることで趣味嗜好が決まり，それを元にユーザ，場所，行動が決まると言える．
+
+洞察1より，ユーザの趣味嗜好を表すグループにユーザは属する．それゆえ，以下の関係が成り立つ．$u_r \sim Categorical(\pi_{g_r})$の関係が成り立つ．
+\begin{equation*}
+  u_d \sim Categorical(\pi_{g_d})
+\end{equation*}
+ただしこの時，$\pi_{g_d}$はハイパーパラメータ$\gamma$から生成され，$Dir(\gamma)$に従って生成されたものである．
+同様に場所も洞察2よりグループごとの位置情報の生成確率分布$\phi_{g_d}$から生成され，
+\begin{eqnarray*}
+  l_d & \sim & Categorical(\phi_{g_d}) \\
+  \phi_{g_d} & \sim & Dir(\beta)
+\end{eqnarray*}
+が成り立つ．
+最後に行動を示す単語は$w_{d, i}$で表しているが，この変数が単独でプレートに載っていることから，ユーザや場所が決まる投稿に対して，行動は複数($N_w$個)存在することを示している(洞察3)．
+$w_{d,i}$はグループが決まればその確率分布が決まるので，$w_{d,i}$の生成確率分布は$\sigma_{g_d}$と表され，これはハイパーパラメータ$\delta$はパラメータととるディリクレ分布$Dir(\delta)$に従う．
+
+\subsubsection{LW関連モデル}
+LW関連モデルはベースモデルに対して洞察5を導入したものである．
+LW関連モデルのグラフィカルモデルを図\ref{lw_model}に示す．
+
+\begin{center}
+\begin{figure}[tb]
+  \tikz{
+    \node[latent] (mu) {$\mu_{l_d}$};
+    \node[obs, above=of mu, yshift=.7cm] (word) {$w_{d,i}$};
+    \node[latent, left=of mu, xshift=-.5cm] (lambda) {$\lambda_{l_d}$};
+    \node[latent, left=of word, xshift=-.5cm] (group) {$g_d$};
+    \node[obs, above=of group] (user) {$u_d$};
+    \node[latent, left=of group] (theta) {$\theta$};
+    \node[const, above=of theta] (alpha) {$\alpha$};
+    \node[obs, above=of word] (location) {$l_d$};
+    \node[latent, above=of location, yshift=.5cm] (phi) {$\phi_{g_d}$};
+    \node[const, above=of phi] (beta) {$\beta$};
+    \node[latent, above=of user, yshift=.5cm] (pi) {$\pi_{g_d}$};
+    \node[const, above=of pi, inner sep=.05cm] (gamma) {$\gamma$};
+    \node[latent, right=of word] (sigma) {$\sigma_{g_d}$};
+    \node[const, above=of sigma] (delta) {$\delta$};
+    \node[const, right=of mu] (epsilon) {$\epsilon$};
+
+    \edge {alpha} {theta};
+    \edge {theta} {group};
+    \edge {group, pi} {user};
+    \edge {group, location, sigma, mu, lambda} {word};
+    \edge {delta} {sigma};
+    \edge {phi, group} {location};
+    \edge {beta} {phi};
+    \edge {gamma} {pi};
+
+    \plate[inner sep=.25cm, inner xsep=.5cm, xshift=-.15cm, yshift=.15cm] {word-plate} {(word)} {$N_w$};
+    \plate[inner sep=.25cm, xshift=-.15cm, yshift=.15cm] {data-plate} {(word-plate)(location)(user)(group)} {$|\bm{D}|$};
+    \plate[inner sep=.30cm, yshift=.15cm] {group-plate1} {(phi)(pi)} {$|\bm{G}|$};
+    \plate[inner sep=.25cm, yshift=.15cm] {group-plate2} {(sigma)} {$|\bm{G}|$};
+    \plate[inner sep=.25cm, yshift=.15cm] {location-plate} {(lambda)(mu)} {$|\bm{L}|$};
+  }
+  \caption{LW関連モデルのグラフィカルモデル}
+  \label{lw_model}
+\end{figure}
+\end{center}
+
+生成過程はベースモデルより行動を生成する部分が複雑になる．というのは洞察5を考慮するに当たってその人の趣味嗜好だけでなくその場所の特徴もその場で行う行動の意思決定に影響するからである．
+本研究ではその行動がどれほどその人の趣味嗜好に受けたか，もしくはどれほどその場所に影響を受けたかというのを$\lambda_{l_d}$で潜在変数として扱っている．
+
+また，この変数は場所ごとに生成することとする．というのはその場所がある行動をすることを目的として来るべき場所なのか，それともその場所にきて色々な行動をするのかは場所に依存するからである．例えば，居酒屋に行けばほとんどの人がご飯を食べるという行動をするだろうし，公園などはそれぞれ過ごし方は好みによって異なる．
+
+このような変数$\lambda_{l_d}$を使って$w_{d, i}$は生成される．具体的には$g_d, l_d$が生成された後，場所ごとに生成された変数$\lambda_{l_d}$を重みとして扱って行動を示す単語を生成する．式で書くと以下のようになる．
+\begin{eqnarray*}
+  \lambda_{l_d} &\sim & Bernoulli(\eta) \\
+  w_{d,i} \sim \lambda_{l_d} Categorical(\mu_{l_d}) &+& (1-\lambda_{l_d}) Categorical(\sigma_{g_d})
+\end{eqnarray*}
+ただし，$\eta$はハイパーパラメータである．
+
+\subsubsection{時間導入モデル}
+時間導入モデルではその名の通り洞察1，洞察2，洞察3を元にモデリングしたベースモデルに洞察4を加え時間の要素を入れたものである．
+このグラフィカルモデルを図\ref{time_model}に示す．
+
+\begin{center}
+\begin{figure}[tb]
+  \tikz{
+    \node[obs] (time) {$t_d$};
+    \node[obs, above=of time, yshift=.5cm] (word) {$w_{d,i}$};
+    \node[latent, left=of word, xshift=-1cm] (group) {$g_d$};
+    \node[obs, above=of group] (user) {$u_d$};
+    \node[latent, left=of group] (theta) {$\theta$};
+    \node[const, above=of theta] (alpha) {$\alpha$};
+    \node[obs, above=of word] (location) {$l_d$};
+    \node[latent, above=of location, yshift=.5cm] (phi) {$\phi_{g_d}$};
+    \node[const, above=of phi] (beta) {$\beta$};
+    \node[latent, above=of user, yshift=.5cm] (pi) {$\pi_{g_d}$};
+    \node[const, above=of pi, inner sep=.05cm] (gamma) {$\gamma$};
+    \node[latent, right=of word] (sigma) {$\sigma_{g_d}$};
+    \node[const, above=of sigma] (delta) {$\delta$};
+    \node[latent, right=of time] (tau) {$\tau_{g_d}$};
+    \node[const, right=of tau] (kappa) {$\kappa$};
+
+    \edge {alpha} {theta};
+    \edge {theta} {group};
+    \edge {group, pi} {user};
+    \edge {group, tau} {time};
+    \edge {group, sigma} {word};
+    \edge {delta} {sigma};
+    \edge {phi, group} {location};
+    \edge {beta} {phi};
+    \edge {gamma} {pi};
+    \edge {kappa} {tau}
+
+    \plate[inner sep=.25cm, xshift=-.15cm, yshift=.15cm] {word-plate} {(word)} {$N_w$};
+    \plate[inner sep=.25cm, xshift=-.15cm, yshift=.15cm] {data-plate} {(word-plate)(location)(user)(group)(time)} {$|\bm{D}|$};
+    \plate[inner sep=.30cm, yshift=.15cm] {group-plate1} {(phi)(pi)} {$|\bm{G}|$};
+    \plate[inner sep=.25cm, yshift=.15cm] {group-plate2} {(sigma)(tau)} {$|\bm{G}|$};
+  }
+  \caption{時間導入モデルのグラフィカルモデル}
+  \label{time_model}
+\end{figure}
+\end{center}
+
+時間導入モデルでは観測変数間の影響はベースモデルと同様にない．それゆえ，生成過程はベースモデルの生成過程に時間に関係する要素を加えれば問題ない．
+あるデータ$d(\in D)$が生成された時間はそのデータが示す観光に関する趣味嗜好$g_d$に影響されて決定される．時間は離散的に考え，カテゴリカル分布から生成されたこととする．この時，$t_d$を生成する過程を式で表すと，
+\begin{eqnarray*}
+  t_d & \sim & Categorical(\tau_{g_d}) \\
+  \tau_{g_d} & \sim & Dir(\kappa)
+\end{eqnarray*}
+となる．
+
+\subsection{推薦} \label{recommendation}
+次に推薦について説明していく．
+まず，推薦をするに当たってユーザに対してより良い観光体験を提供するためにはユーザの情報が不可欠である．
+それゆえ今回は推薦をする前にユーザの情報を取得するべく初期のアンケートを行う．
+初期アンケートをすることでそのユーザがどのような観光体験を好むのか，どのような体験には興味を示さないのかを測ることができる．
+初期アンケートについての詳細はアプリケーションのユーザインターフェースの話になるので節\ref{application}で述べるが，初期アンケートを実行することで新しいユーザ$u'$に対してあるグループ$g$に属する確率$p(g|u')$を得ることができる．
+
+推薦システムで最終的に知りたいことはユーザが好きな観光場所と行動，もし要素として存在すれば時間を提供することである．
+例えば場所について考慮してみる．
+分析モデルで学習をしたことで各グループがある場所について好む確率が推論できるようになった．
+つまりある場所$l$があった時にあるグループ$g$の人がその場所を好む確率$p(l|g)$を求めることができる．
+同様に行動$w$や時間$t$に対しても$p(w|g), p(t|g)$を推論することができる．
+
+以上の議論で$p(g|u')$と$p(l|g), p(w|g), p(t|g)$が求まったため，最終的に知りたい$p(l|u'), p(w|u'), p(t|u')$が求められる．
+この計算は各グループにおける確率を計算し，合計を求めることでグループを周辺化する計算を実行することで可能となる．
+具体的には場所と時間については，
+\begin{eqnarray*}
+p(l|u') =& \sum_g^G p(l|g) * p(g|u') \\
+=& \sum_g^G \phi_g * p(g|u') \\
+p(t|u') =& \sum_g^G p(t|g) * p(g|u') \\
+=& \sum_g^G \tau_g * p(g|u')
+\end{eqnarray*}
+と表すことができる．
+
+行動についてのみモデルによって計算方法が異なる．
+ベースモデルや時間導入モデルでは場所や時間と同様に以下のようにグループを周辺化することで求めることができる．
+\begin{eqnarray*}
+  p(w|u') =& \sum_g^G p(w|g) * p(g|u') \\
+  =& \sum_g^G \sigma_g * p(g|u')
+\end{eqnarray*}
+
+しかし，LW関連モデルでは行動$w$を決めるために場所による影響が生じてくる．そのため，確率は以下のように求められる．
+\begin{eqnarray*}
+  &p(w|u')& = \sum_g^G \sum_l^L p(w|g, l) * p(l|g) * p(g|u') \\
+  &=& \sum_g^G \sum_l^L \{ \lambda_l p(w|l) + (1-\lambda_l) p(w|g) \} p(l|g) p(g|u') \\
+  &=& \sum_g^G \sum_l^L \{ \lambda_l \mu_l + (1-\lambda_l) \sigma_g \} p(l|g) p(g|u') \\
+\end{eqnarray*}
+
+以上より観光体験の要素である各場所，行動，時間を好む確率を計算できるようになった．推薦自体はこの確率を並べ替えてランキング化したもので提供すれば良い．よってこれらの計算で観光体験をユーザに提供することができるようになった．
+
+%---------------------------------------------------
+\section{実験} \label{experiment}
+この節では分析モデルの評価実験を行う．
+最初にデータセットについて述べ，その後実験計画について述べていく．
+
+\subsection{データセット} \label{dataset}
+InstagramやFlickrの情報は投稿自体にWho, When, Where, Whatの4つの情報が含まれている．
+アカウント自体がWhoを表し，投稿の時間がWhen, 付加された位置情報がWhen, 最後に写真に行動が示されている．
+故に体験を分析するにはこのようなデータが最適であり，実際に実験ではYahoo Flickr Creative Commons 100M(以下YFCC)\cite{thomee2016yfcc100m}を使って行った．
+YFCCは過去のFlickrのデータが大量に存在し，世界中の写真とそのメタ情報が提供されている．
+今回はそのデータを京都市内のデータに限定し，提案モデルの観測データとして扱う．
+実際のデータ数は以下の表\ref{dataset-table}に示す．
+
+\begin{table}[thb]
+  \begin{center}
+    \caption{データの概要}
+    \label{dataset-table}
+    \begin{tabular}{|p{5cm}|p{1.5cm}|} \hline
+      データの種類 & データ数 \\ \hline \hline
+      ユーザ & 915 \\
+      場所 & 1065 \\
+      タグの種類 & 2659 \\
+      総タグ数 & 372599 \\ \hline
+      データ数 & 37469 \\ \hline
+    \end{tabular}
+  \end{center}
+\end{table}
+
+YFCCで得られるメタ情報の中で場所の情報は緯度・経度とその場所の住所がある．
+その中で緯度・経度を使い，クラスタリングを行う．
+というのも緯度・経度をそのまま使用すると同じ場所として認識されることがほぼなくなってしまい，
+全て異なる場所となってしまうことを避けるためである．
+それゆえ，先行研究\cite{kinoue}で用いられたDBSCANを元にしたクラスタリングを行い，
+さらにクラスのサイズが大きかったためMean Shiftを用いてクラスタリングを実行した．
+表\ref{dataset-table}で示されてる場所の数はクラスタの数である．
+クラスタリングした時にクラスの代表点が定まるのでそれを地図にマッピングすると図\ref{mapping_image}となる．
+マッピングにはGoogle My Mapを用いた．
+
+\begin{figure}[tb]
+  \begin{center}
+    \includegraphics[clip, width=6cm] {./image/mapping.eps}
+    \caption{クラスタリング後の場所の配置}
+    \label{mapping_image}
+  \end{center}
+\end{figure}
+
+また，タグに関してYFCCでは写真ごとにタグ付がなされている．
+一つの写真について以下の３種類のタグ付がなされている．
+\begin{description}
+  \setlength{\leftskip}{.5cm}
+  \item[\textbf{ユーザがつけるタグ}] ユーザが投稿の際につけるタグである．ユーザがつけるタグに制限はなく，自由にタグを付け加えることができる．
+  \item[\textbf{機器がつけるタグ}] カメラやコンピュータ，その他自動システムによって自動的につけられたタグである．
+  \item[\textbf{画像認識によってつけるタグ}] これはBartらが畳み込みニューラルネットワークを用いて画像認識をし，タグ付したものである．メタ情報自体は単数または複数のタグとそれぞれについて検出確率がついている．
+\end{description}
+実験に用いるデータセットでは以上の3つのタグが全て存在しないデータは省いた．
+
+また，今回の実験ではこれらのYFCCに元からついていたタグだけでなく新たにその写真の状況を判断する場面検出(シーンディテクション)を行い，新しいタグを作ることにした．
+場面検出ではPlace365\cite{zhou2017places}を用いて各写真ごとにindoorかoutdoorの確率とそれぞれのシーンの確率を割り出した．
+ここでいうシーンとはバーやビーチなどの場所を365カテゴリに分けて検出することができる．
+
+今回の実験では主にYFCCにもとからついていた画像認識によってつけるタグとPlace365による場面検出によるタグの２種類を用いる．
+
+\subsection{実験計画} \label{experimental-setting}
+今回の実験では上記のデータセットを用いてユーザ体験の分析を行う．
+節\ref{model_definition}で述べた各モデルに対して上記のデータセットを用いて学習する．
+今回の推論の学習は変分推論を用いた．
+最適化手法はAdam\cite{kingma2014adam}を用いて行い，その学習rateは$0.001$とした．
+ハイパーパラメータである$\alpha, \beta, \gamma, \delta, \epsilon$はそれぞれ一様分布を用い，初期値は$1/(要素の長さ)$とする．
+以上5つのパラメータの他に与えるデータとしてはグループの数が存在する．
+グループはユーザのトピックを表すのでその数は評価に大きく影響してくる．
+今回の実験ではグループ数はハイパーパラメータとして最小3として複数のグループ数で試すこととする．
+
+データセットはランダムに1割をテストデータとして分割し，訓練データで学習して評価にはテストデータを用いる．
+また，実装にはPyroを用いて行う．
+
+\subsection{評価} \label{evaluation}
+今回の実験の評価は各モデルに対してどれほど人々の趣味嗜好を抽出できているかということであることとその精度である．それぞれをどのように測定するのかをこの節では説明していく．
+
+\subsubsection{Coherence} \label{coherence}
+節\ref{proposed_method}ではグループを導入することで人々の趣味嗜好をグループ単位でまとめることができると述べている．
+このタスクはクラスタリングとは違うが，グループにまとめるという点で同じような性質を持つと考えられる．
+また，ある人があるグループに属する確率が出るのであって，たくさんのグループに属する可能性があることからソフトクラスタリングに似ている．
+つまり評価指標としてはソフトクラスタリングでいう内部結合性をもつかどうかを判断すべきである．
+このことは今回のタスクに対応して述べると，そのグループに所属する人は同じような趣味嗜好をもっているべきであるという洞察1の内容と一致する．
+
+また，トピックモデルの指標としてCoherence\cite{first-coherence}というものがある．
+Coherenceはそのトピック内の要素の類似度が高いほど評価値が高くなる．
+それゆえ今回は洞察1の内容を測る指標としてCoherenceを採用することにした．
+
+Coherenceにもいくつか種類があるが，それは最終的に求める要素間の関係をどのように表すかという議論に帰着する．
+例えばトピックモデルの中でよく使われるモデルのLDA\cite{blei2003latent}ではUCI\cite{newman2010automatic}と呼ばれるCoherenceの1種が使われる．
+このUCIではWekipediaを用いて単語間の距離を計算しており，文章における単語間の距離を外部コーパスに頼っている．
+しかし，今回はタグを扱っており文章中の単語とは異なるため，タグ間の関係はデータから考えることとする．
+このようにデータから直接単語間の距離を求めるものにUMass\cite{mimno2011optimizing}というCoherenceの種類が存在する．
+
+ゆえに今回はUMassを用いてCoherenceを計算する．
+具体的な求め方は以下のようになる．
+\begin{equation*}
+  Coherence = \sum_g^G \sum_{i=1}^c \sum_{j=1}^{i-1} log \frac{D(w_i, w_j) + \epsilon}{D(w_j)}
+\end{equation*}
+ただし，$D(w_i)$は$w_i$と$w_j$が同時に出現する写真数，$D(w_j)$は$w_j$が出現する写真数である．
+また，$c, \epsilon$はパラメータであり，元の論文\cite{mimno2011optimizing}に従いそれぞれ$10, 1$とする
+
+\subsubsection{精度} \label{precision}
+精度は学習を進めるに当たってその正確さを求めるものである．
+今回の実験でいうと，よりデータが表すユーザの行動をモデルが学習できているかというものである．
+今回の実験では精度の指標として以下の2つをあげる．
+
+\begin{quote}
+  \begin{itemize}
+      \item ELBO
+      \item Perplexity
+  \end{itemize}
+\end{quote}
+
+ELBOに関しては学習の過程でどれほど学習が進んでいるかを判断する大事な指標である．ELBOはその値を最大化することで今推論している近似分布と真の事後分布との距離を縮めることができます．学習の目的はこの事後分布との距離を最小にすることであるので，精度としての指標としてまず最初に考えることができる．
+
+次にPerplexityであるが，これはCoherenceと同様にトピックモデルでよく使われる指標である．
+Perplexityは確率モデルにおける予測精度を示すもので次のように定義される．
+\begin{equation*}
+  Perplexity = exp \{ - \frac{1}{N} \sum_n^N log p(x_n) \}
+\end{equation*}
+ただし，$N$はデータ数を表し，$p(x_n)$はそのデータにおける尤度を示している．
+
+
+%---------------------------------------------------
+\section{アプリケーション} \label{application}
+本論文ではこの提案モデルを利用したアプリケーションを設計した．
+このアプリケーションでは実際にユーザに観光地を選んでもらい，趣味嗜好を考慮しながら観光体験の推薦を行う．
+主な機能としては観光体験の推薦の他に，趣味嗜好を知るためのアンケートおよびグループの推論である．
+
+全体のアーキテクチャ図を図\ref{architecture}に示す．
+
+\begin{figure}[tb]
+  \begin{center}
+    \includegraphics[clip, width=8cm] {./image/architecture.eps}
+    \caption{全体の構成図}
+    \label{architecture}
+  \end{center}
+\end{figure}
+
+以下，ユーザインターフェースと実際の機能の詳細について説明する．
+
+\subsection{ユーザインターフェース}
+開発アプリケーションは2つの画面からなる．
+\begin{figure}[tb]
+  \begin{center}
+    \includegraphics[clip, width=8cm] {./image/questionaire.eps}
+    \caption{初期アンケート画面}
+    \label{questionaire_image}
+  \end{center}
+\end{figure}
+
+\begin{figure}[tb]
+  \begin{center}
+    \includegraphics[clip, width=8cm] {./image/recommendation.eps}
+    \caption{推薦画面}
+    \label{recommendation_image}
+  \end{center}
+\end{figure}
+1つ目は初期アンケートを行う画面で，ユーザがアプリケーションを訪れた時に最初に表示する．
+初期アンケート画面ではユーザはいくつかの画像を見て，興味の度合いをそれぞのの画像に対してフィードバックする．
+その結果をもとにユーザの属する情報を判断する．
+
+2つ目は推薦を行う画面であり，ここでユーザは観光体験の推薦を行う．
+推薦画面では，左側に推薦された観光体験がリストで表示されており，ユーザはクリックしたり，再推薦を行うことができる．
+また，観光場所のデータが地図上に全てマッピングされており，ユーザは選ぶことができる．
+
+初期アンケート画面は最初のみでそれ以降は主に推薦画面での操作となる．
+
+\subsection{アプリケーションの機能} \label{function_design}
+アプリケーションの機能としては主に観光体験の推薦とグループの推論に分かれる．
+そしてこの主な2つの機能は2つのエンジンに分けて実現している．
+観光体験を推薦する機能を担う方をベースエンジン，グループの推論をする機能を担う方を推論エンジンとする．
+ベースエンジンは\ref{model_definition}節のモデルを構築，実現する．
+推論エンジンは\ref{online_estimation}節の逐次推論手法を実装する．
+以降それぞれのエンジンにわけて説明していく．
+
+\subsubsection{ベースエンジン}
+ベースエンジンでは，主に提案手法で説明したモデルを用いて観光体験の推薦を行う．
+入力自体はユーザのIDのみを受け付ける．
+そのユーザの属するグループは推論エンジンによって推論されるので，データベースを読み出すことによってユーザの属するグループを把握することができる．
+故にグループがわかったので，モデルに当てはめることでそのグループのトピックの分布，および場所，行動を示す単語の生成確率分布を取得できる．
+あとは確率的に高い順にスコアリングし，推薦に出力することができる．
+出力自体は位置情報，行動を示す単語のリストとなる．
+
+\subsubsection{推論エンジン}
+推論エンジンではアプリケーションに訪れたユーザがどのグループに属するかを推論する役割をもつ．
+ここでいうグループとは，すでに提案手法で示したモデルの学習があらかじめ終了しており，学習データのユーザがクラスタリングされたものである．
+推論エンジンが推論をするタイミングは複数存在する．
+
+まず初めに初期アンケートの時に推論を行う．
+初期アンケートはコールドスタート問題に対応するもので，いくつかの画像を見せてユーザにそれぞれの画像に対してフィードバックをしてもらう．
+実際に見せる画像はグループごとの代表的な画像となっており，そのフィードバックをベクトルとして入力する．
+推論はグループごとのアンケート画像の生成確率のベクトルと類似度をはかり，スコアの高いものとする．
+
+次に，推薦画面でユーザが観光体験をクリックしたときである．
+クリックしたということはユーザがその体験に興味を示したことを表す．
+この時にユーザの属するグループのその体験に対する生成確率と他のグループの確率を比べる．
+
+最後に推薦自体のフィードバックした時に推論を行う．
+推薦した体験一つ一つにフィードバックをしてもらい，そのベクトルを入力とする．
+推論の仕方自体は初期アンケートと同じである．
+
+以上3つのタイミングで推論を行い，随時ユーザの好みに合わせて属するグループを更新していく．
+
+
+%---------------------------------------------------
+\section{今後の課題} \label{future_work}
+本研究では推薦システムを作成することが目的となるため，その推薦システムの有効性を示す必要がある．
+節\ref{recommendation}で推薦について述べたが，分析モデルで推論した事後分布の使い方は他にも存在する．
+そのため関連研究で述べた他の推薦システムとの比較実験が必要となる．
+比較実験ではRecallなどの推薦精度の他にコールドスタートに対応するために少ないデータでも有効な推薦ができるかどうか，当初の背景にもあったオーバーツーリズムに対応して推薦場所を分散させることができているかなどを判断するべきである．
+また，その比較実験で結果がよくないならば節\ref{recommendation}で述べた方法を調査$\cdot $改良する必要がある．
+
+また，最終的にはアプリケーションを作成し，その有効性を確認するところまでが今回の研究の最終到達時点である．その実装も今後研究の一貫として行う必要がある．同時にユーザの趣味嗜好の逐次更新についても詳細が決まってないため調査およびアルゴリズムを構築しなくてはならない．
+
+%---------------------------------------------------
+\section{まとめ} \label{summary}
+本研究では個人化した観光に対する推薦を実現するために，観光の体験を分析し趣味嗜好を推論するシステムを提案した．
+体験の分析ではWho, Where, When, Whatの4要素に着目し，5つの洞察を考慮することでモデリングを行った．
+また，グループをモデルに加えることでコールドスタート問題に対応した．
+アプリケーションでは，提案手法のモデルを応用して推薦システムにした他，ユーザのフィードバックを適宜得ることによってより正確な推論をができるような構成を提案した．
+
+\bibliographystyle{abbrv}
+\bibliography{paper}
+
+\end{document}
