@@ -231,7 +231,7 @@ Yuanらの手法は，日常生活でたくさん発信される位置情報付�
 \end{eqnarray}
 となる．
 
-\subsubsection{ベースモデル}
+\subsubsection{ベースモデル} \label{base-model}
 本研究のモデルでは，ユーザ，場所，行動を表す単語を観測変数として扱い，主にグループを潜在変数とする．
 つまりユーザの趣味嗜好の部分はこのグループによって抽出される．
 ベースモデルのグラフィカルモデルを図\ref{basemodel}に示す．
@@ -320,7 +320,7 @@ Yuanらの手法は，日常生活でたくさん発信される位置情報付�
 が成り立つ．
 最後に行動を示す単語は$w_{d, i}$で表しているが，この変数が単独でプレートに載っていることから，ユーザや場所が決まる投稿に対して，行動は複数($N_w$個)存在することを示している(観察3)．
 
-\subsubsection{場所対応モデル}
+\subsubsection{場所対応モデル} \label{location-aware-model}
 場所対応モデルはベースモデルに対して観察5を導入したものである．
 場所対応モデルのグラフィカルモデルを図\ref{lw_model}に示す．
 
@@ -351,6 +351,7 @@ Yuanらの手法は，日常生活でたくさん発信される位置情報付�
     \edge {phi, group} {location};
     \edge {beta} {phi};
     \edge {gamma} {pi};
+    \edge {epsilon} {mu};
 
     \plate[inner sep=.25cm, inner xsep=.5cm, xshift=-.15cm, yshift=.15cm] {word-plate} {(word)} {$N_w$};
     \plate[inner sep=.25cm, xshift=-.15cm, yshift=.15cm] {data-plate} {(word-plate)(location)(user)(group)} {$|\bm{D}|$};
@@ -366,7 +367,31 @@ Yuanらの手法は，日常生活でたくさん発信される位置情報付�
 生成過程はベースモデルより行動を生成する部分が複雑になる．
 観察5はその場所の特徴もその場で行う行動の意思決定に影響することを表している．
 そのため，場所対応モデルではその行動がどれほどその人の趣味嗜好に受けたか，もしくはどれほどその場所に影響を受けたかを表す潜在変数$\lambda_{l_d}$を導入している．
+アルゴリズムをアルゴリズム\ref{location-aware-generative-part}
 
+\begin{algorithm}[tb]
+  \caption{場所対応モデルにおける生成過程}\label{location-aware-generative-part}
+  \begin{algorithmic}[1]
+    \State $\theta \sim Dir(\alpha)$ \Comment{グループ事前分布を生成}
+    \For{$g$ in $|\bm{G}|$}
+    \State $\pi_g \sim Dir(\gamma)$ \Comment{ユーザ事前分布を生成}
+    \State $\phi_g \sim Dir(\beta)$ \Comment{場所事前分布を生成}
+    \State $\sigma_g \sim Dir(\delta)$ \Comment{単語事前分布を生成}
+    \EndFor
+    \For{$l$ in $|\bm{L}|$} \Comment{場所ごとに処理}
+    \State $\mu_l \sim Bernoulli(\epsilon)$
+    \EndFor
+    \For{$d$ in $|\bm{D}|$} \Comment{グループごとに処理}
+    \State $g_d \sim Categorical(\theta)$ \Comment{グループを生成}
+    \State $u_d \sim Categorical(\pi_{g_d})$ \Comment{ユーザを生成}
+    \State $l_d \sim Categorical(\phi_{g_d})$ \Comment{場所を生成}
+    \For{$d$ in $N_w$}
+    \State $w_{d, i} \sim Categorical(\sigma_{g_d}) + (1-\lambda_{l_d}) Categorical(\sigma_{g_d})$ \Comment{行動を示す単語を生成}
+    \EndFor
+    \EndFor
+  \end{algorithmic}
+\end{algorithm}
+%
 変数$\lambda_{l_d}$は場所ごとに生成される．行動の場所への依存関係つまりその場所がある行動をすることを目的として来るべき場所なのか，それともその場所にきて色々な行動をするのかをモデリングする．例えば，居酒屋に行けばほとんどの人がご飯を食べるという行動をするだろうし，公園などはそれぞれ過ごし方は好みによって異なる．
 
 この変数$\lambda_{l_d}$を用いて$w_{d, i}$は生成される．具体的には$g_d, l_d$が生成された後，場所ごとに生成された変数$\lambda_{l_d}$を重みとして扱って行動を示す単語を生成する．式で書くと以下のようになる．
@@ -377,10 +402,10 @@ Yuanらの手法は，日常生活でたくさん発信される位置情報付�
 \end{eqnarray}
 ただし，$\eta$はハイパーパラメータである．
 
-\subsubsection{時間対応モデル}
+\subsubsection{時間対応モデル} \label{time-aware-model}
 時間対応モデルはベースモデルに時間の影響を考慮したモデルである．
 このグラフィカルモデルを図\ref{time_model}に示す．
-
+%
 \begin{center}
 \begin{figure}[tb]
   \tikz{
@@ -420,8 +445,32 @@ Yuanらの手法は，日常生活でたくさん発信される位置情報付�
   \label{time_model}
 \end{figure}
 \end{center}
-
+%
+\begin{algorithm}[tb]
+  \caption{時間対応モデルにおける生成過程}\label{time-aware-generative-part}
+  \begin{algorithmic}[1]
+    \State $\theta \sim Dir(\alpha)$ \Comment{グループ事前分布を生成}
+    \For{$g$ in $|\bm{G}|$}
+    \State $\pi_g \sim Dir(\gamma)$ \Comment{ユーザ事前分布を生成}
+    \State $\phi_g \sim Dir(\beta)$ \Comment{場所事前分布を生成}
+    \State $\sigma_g \sim Dir(\delta)$ \Comment{単語事前分布を生成}
+    \State $\tau_{g_d}  \sim  Dir(\kappa)$ \Comment{時間事前分布を生成}
+    \EndFor
+    \For{$d$ in $|\bm{D}|$} \Comment{グループごとに処理}
+    \State $g_d \sim Categorical(\theta)$ \Comment{グループを生成}
+    \State $u_d \sim Categorical(\pi_{g_d})$ \Comment{ユーザを生成}
+    \State $l_d \sim Categorical(\phi_{g_d})$ \Comment{場所を生成}
+    \State $t_d  \sim  Categorical(\tau_{g_d})$ \Comment{時間を生成}
+    \For{$d$ in $N_w$}
+    \State $w_{d, i} \sim Categorical(\sigma_{g_d})$ \Comment{行動を示す単語を生成}
+    \EndFor
+    \EndFor
+  \end{algorithmic}
+\end{algorithm}
+%
 時間対応モデルでは観測変数間の影響はベースモデルと同様にない．それゆえ，生成過程はベースモデルの生成過程に時間に関係する要素を加えれば問題ない．
+生成過程をアルゴリズム\ref{time-aware-generative-part}に示す．
+
 あるデータ$d(\in D)$が生成された時間はそのデータが示す観光に関する趣味嗜好$g_d$に影響されて決定される．時間は離散的に考え，カテゴリカル分布から生成されたこととする．この時，$t_d$を生成する過程を式で表すと，
 \begin{eqnarray}
   t_d & \sim & Categorical(\tau_{g_d}) \\
@@ -430,45 +479,75 @@ Yuanらの手法は，日常生活でたくさん発信される位置情報付�
 となる．
 
 \subsection{ユーザ体験の推薦手法} \label{recommendation}
-本節では，ユーザ体験の推薦手法について説明する．節\ref{model_definition}で構築したユーザ体験の分析モデルを用いて推論を行い，新しいユーザにたいしてユーザ体験を推薦する．
+本節では，ユーザ体験の推薦手法について説明する．節\ref{model_definition}で構築したユーザ体験の分析モデルを用いて推論を行い，新しいユーザに対してユーザ体験を推薦する．
 
 推薦をするに当たってユーザに対してより良いユーザ体験を提供するためにはユーザの情報が不可欠である．
 それゆえ今回は推薦をする前にユーザの情報を取得する必要があり，本研究では初期にアンケートを行う．
 初期アンケートをしてそのユーザがどのような観光体験を好むのか，どのような体験には興味を示さないのかを測ることができる．
-初期アンケートについての詳細はアプリケーションのユーザインターフェースの話になるので節\ref{application}で述べるが，初期アンケートを実行することで新しいユーザ$u'$に対してあるグループ$g$に属する確率$p(g|u')$を得ることができる．
 
-推薦システムで最終的に知りたいことはユーザが好きな観光場所と行動，もし要素として存在すれば時間を提供することである．
-例えば場所について考慮してみる．
-分析モデルで学習をしたことで各グループがある場所について好む確率が推論できるようになった．
-つまりある場所$l$があった時にあるグループ$g$の人がその場所を好む確率$p(l|g)$を求めることができる．
-同様に行動$w$や時間$t$に対しても$p(w|g), p(t|g)$を推論することができる．
+初期アンケートについての詳細はアプリケーションのユーザインターフェースの話になるので節\ref{application}で述べるが，初期アンケートを実行することで新しいユーザ$u'$に対してアンケートで示した写真の場所およびタグに対する好みを取得できる．
+アンケートに表示する写真の一つを$d_0$とする.
+この時ユーザは$d_0$を見てその場所と写真が表すその場所での行動を認識し点数をつける．
+これは$d_0$の場所$l_0$と複数のタグ$\bm{w_0}(=w_{0,0}, \dots, w_{0,N_{w_0}})$に対するユーザ$u'$の評価と考えられ，$p(l_0,\bm{w_0}|u')$とする．
 
-以上の議論で$p(g|u')$と$p(l|g), p(w|g), p(t|g)$が求まったため，最終的に知りたい$p(l|u'), p(w|u'), p(t|u')$が求められる．
-この計算は各グループにおける確率を計算し，合計を求めることでグループを周辺化する計算を実行することで可能となる．
-具体的には場所と時間については，
+ベイズの公式により以下の式で$p(u'|l_0, \bm{w_0})$を得る．
 \begin{eqnarray}
-p(l|u') =& \sum_g^G p(l|g) * p(g|u') \nonumber \\
-=& \sum_g^G \phi_g * p(g|u') \\
-p(t|u') =& \sum_g^G p(t|g) * p(g|u') \nonumber \\
-=& \sum_g^G \tau_g * p(g|u')
+  \label{bayes-eq}
+  p(u'|l_0, \bm{w_0}) = \frac{p(l_0, \bm{w_0}|u')p(u')}{p(l_0, \bm{w_0})}
 \end{eqnarray}
-と表すことができる．
+初期アンケートには複数の写真を表示する．
+それら$n$枚あるとして各写真を$d_0 \dots d_n$とし，上の式(\ref{bayes-eq})を更新していく．
+更新するにあたって，式(\ref{bayes-eq})の事前分布に当たる$p(u')$はそれまでの写真で得た事後分布を使う．
+これらを式に表すと，
+\begin{align}
+  &p(u'|l_0, \bm{w_0}, \dots , l_n, \bm{w_n}) = \frac{p(l_n, \bm{w_n}|u')}{p(l_n, \bm{w_n})} \nonumber \\
+  &* p(u'|l_0, \bm{w_0}, \dots , l_{n_1}, \bm{w_{n-1}}) \\
+  \label{bayes-update}
+  =& \dfrac{\prod_i^n p(l_i, \bm{w_i}|u')}{\prod_i^n p(l_i, \bm{w_i})} p(u') 
+\end{align}
+となる．
 
-行動についてのみモデルによって計算方法が異なる．
-ベースモデルや時間対応モデルでは場所や時間と同様に以下のようにグループを周辺化することで求めることができる．
+推薦システムで最終的に知りたいことはユーザが好みそうな観光場所とその場での行動を提供することである．
+ここで$p(L,W|u')$を求めることができればその確率をスコアとしてランキングを作成することができ，よりユーザが好みそうな観光場所とその場での行動を提供することができる．
+ベイズの公式を適用すると，
 \begin{eqnarray}
-  p(w|u') =& \sum_g^G p(w|g) * p(g|u') \nonumber \\
-  =& \sum_g^G \sigma_g * p(g|u')
+  p(L,W|u') = \frac{p(u'|L, W) p(L,W)}{p(u')}
 \end{eqnarray}
+となる．
+ここで先の式(\ref{bayes-update})を$p(u'|L,W)$とみなすことで，$p(L,W|u')$を得る．
+これを式で表すと，
+\begin{eqnarray}
+  p(L,W|u') &=& \dfrac{\dfrac{\prod_i^n p(l_i, \bm{w_i}|u')}{\prod_i^n p(l_i, \bm{w_i})} p(u')
+ p(L,W)}{p(u')} \\
+  \label{recommendation-score}
+  &=& \dfrac{\prod_i^n p(l_i, \bm{w_i}|u')}{\prod_i^n p(l_i, \bm{w_i})} p(L,W)
+\end{eqnarray}
+となる．
 
-しかし，場所対応モデルでは行動$w$を決めるために場所による影響が生じてくる．そのため，確率は以下のように求められる．
-\begin{eqnarray*}
-  &p(w|u')& = \sum_g^G \sum_l^L p(w|g, l) * p(l|g) * p(g|u') \\
-  &=& \sum_g^G \sum_l^L \{ \lambda_l p(w|l) + (1-\lambda_l) p(w|g) \} p(l|g) p(g|u') \\
-  &=& \sum_g^G \sum_l^L \{ \lambda_l \mu_l + (1-\lambda_l) \sigma_g \} p(l|g) p(g|u') \\
-\end{eqnarray*}
+上の式(\ref{recommendation-score})の$p(l_i, \bm{w_i})$は分析手法で学習した事後分布を用いることで計算することができる．
+分析手法ではデータごとにグループを生成し，そのグループを元に場所や行動を示す単語を生成している．
+それゆえ，場所や行動を示す単語の生成確率を計算するためには以下のようにグループを周辺化する必要がある．
+ある投稿データの場所を$l$とそのデータの行動を示す複数の単語を$\bm{w}(=w_0, \dots, w_{N_w})$とすると,
+\begin{align}
+  p(l, \bm{w}) &= \sum_g^G p(l, \bm{w}|g) \\
+  &= \sum_g^G \sum_i^{N_w} p(l, w_i|g)
+\end{align}
 
-以上より観光体験の要素である各場所，行動，時間を計算できるようになった．推薦システムはこの確率を並べ替えて上位にランキングするもので提供すれば良い．
+ここで$p(l,w_i|g)$の計算は分析手法のモデルによる．
+ベースモデルや時間対応モデルは場所と行動を示す単語間に影響はないため，
+\begin{align}
+  p(l, w_i|g) &= p(l|g) p(w_i|g)  \nonumber \\
+  &= \phi(l|g) \sigma(w_i|g)
+\end{align}
+と表せる．
+
+一方場所対応モデルでは行動を示す単語の生成に場所の影響が入るため，
+\begin{align}
+  p(l, w_i|g) &= p(w_i|g, l) p(l|g) \nonumber \\
+  &= \{ \lambda_l p(w_i|l) + (1-\lambda_l) p(w_i|g) \} p(l|g) \\
+  &= \{ \lambda_l \mu(w_i|l) + (1-\lambda_l) \sigma(w_i|g) \} \phi(l|g) \nonumber
+\end{align}
+と計算できる．
 
 %---------------------------------------------------
 \section{実験} \label{experiment}
@@ -477,7 +556,7 @@ p(t|u') =& \sum_g^G p(t|g) * p(g|u') \nonumber \\
 
 \subsection{データセット} \label{dataset}
 節\ref{def}で議論したようにInstagramやFlickrの情報は投稿自体にWho, When, Where, Whatの4つの情報が含まれている．
-故に体験を分析するにはこのようなデータが最適であり，実際に実験ではYahoo Flickr Creative Commons 100M(以下YFCC)\cite{thomee2016yfcc100m}を使って行った．
+故に体験を分析するにはこのようなデータが適しており，実験ではYahoo Flickr Creative Commons 100M(以下YFCC)\cite{thomee2016yfcc100m}を使って行った．
 YFCCは過去のFlickrのデータが大量に存在し，世界中の写真とそのメタ情報が提供されている．
 今回はそのデータを京都市内のデータに限定し，提案モデルの観測データとして扱う．
 実際のデータ数は以下の表\ref{dataset-table}に示す．
@@ -595,11 +674,12 @@ Perplexityは確率モデルにおける予測精度を示すもので次のよ�
 
 %---------------------------------------------------
 \section{アプリケーション} \label{application}
-本論文ではこの提案モデルを利用したアプリケーションを設計した．
+本研究ではユーザ体験分析モデルを利用した推薦アプリケーションを設計した．
 このアプリケーションでは実際にユーザに観光地を選んでもらい，趣味嗜好を考慮しながら観光体験の推薦を行う．
 主な機能としては観光体験の推薦の他に，趣味嗜好を知るためのアンケートおよびグループの推論である．
 
 全体のアーキテクチャ図を図\ref{architecture}に示す．
+以下，ユーザインターフェースと実際の機能の詳細について説明する．
 
 \begin{figure}[tb]
   \begin{center}
@@ -609,10 +689,9 @@ Perplexityは確率モデルにおける予測精度を示すもので次のよ�
   \end{center}
 \end{figure}
 
-以下，ユーザインターフェースと実際の機能の詳細について説明する．
 
 \subsection{ユーザインターフェース}
-開発アプリケーションは2つの画面からなる．
+開発アプリケーションは2つの画面からなる(図\ref{questionaire_image}, 図\ref{recommendation_image})．
 \begin{figure}[tb]
   \begin{center}
     \includegraphics[clip, width=8cm] {./image/questionaire.eps}
@@ -628,11 +707,11 @@ Perplexityは確率モデルにおける予測精度を示すもので次のよ�
     \label{recommendation_image}
   \end{center}
 \end{figure}
-1つ目は初期アンケートを行う画面で，ユーザがアプリケーションを訪れた時に最初に表示する．
+図\ref{questionaire_image}は初期アンケートを行う画面で，ユーザがアプリケーションを訪れた時に最初に表示する．
 初期アンケート画面ではユーザはいくつかの画像を見て，興味の度合いをそれぞのの画像に対してフィードバックする．
 その結果をもとにユーザの属する情報を判断する．
 
-2つ目は推薦を行う画面であり，ここでユーザは観光体験の推薦を行う．
+図\ref{recommendation_image}は推薦を行う画面であり，ここでユーザは観光体験の推薦を行う．
 推薦画面では，左側に推薦された観光体験がリストで表示されており，ユーザはクリックしたり，再推薦を行うことができる．
 また，観光場所のデータが地図上に全てマッピングされており，ユーザは選ぶことができる．
 
@@ -692,7 +771,7 @@ Perplexityは確率モデルにおける予測精度を示すもので次のよ�
 \section{まとめ} \label{summary}
 本研究では個人化した観光に対する推薦を実現するために，観光の体験を分析し趣味嗜好を推論するシステムを提案した．
 体験の分析ではWho, Where, When, Whatの4要素に着目し，5つの観察を考慮することでモデリングを行った．
-また，グループをモデルに加えることでコールドスタート問題に対応した．
+また，潜在変数をモデルに加えることでコールドスタート問題に対応した．
 アプリケーションでは，提案手法のモデルを応用して推薦システムにした他，ユーザのフィードバックを適宜得ることによってより正確な推論をができるような構成を提案した．
 
 \bibliographystyle{abbrv}
